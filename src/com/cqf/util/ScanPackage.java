@@ -1,5 +1,7 @@
 package com.cqf.util;
 
+import com.cqf.config.ScanPackageConfig;
+
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
@@ -14,22 +16,30 @@ import java.util.Set;
  * Created by 78544 on 2016/11/24.
  */
 public class ScanPackage {
-    public Set<Class> scan(String packageName) throws IOException {
+    public Set<Class> scan() throws IOException {
         Set<Class> classSet = new HashSet<Class>();
 //        String packageName = "com.cqf.controller";
-        String packageDirName = packageName.replace(".", "/");
-        boolean recursive = true;
-
-        Enumeration<URL> resources = Thread.currentThread().getContextClassLoader().getResources(packageDirName);
-
-        while (resources.hasMoreElements()) {
-            URL url = resources.nextElement();
-            if ("file".equals(url.getProtocol())) {
-                String filePath = URLDecoder.decode(url.getFile(), "utf-8");
-                System.out.println("filePath=" + filePath);
-                findClasses(packageName, filePath, recursive, classSet);
+        Set<String> packageNames = new ScanPackageConfig().getPackages();
+        packageNames.forEach(packageName -> {
+            String packageDirName = packageName.replace(".", "/");
+            boolean recursive = true;
+            Enumeration<URL> resources;
+            try {
+                resources = Thread.currentThread().getContextClassLoader().getResources(packageDirName);
+                while (resources.hasMoreElements()) {
+                    URL url = resources.nextElement();
+                    if ("file".equals(url.getProtocol())) {
+                        String filePath = URLDecoder.decode(url.getFile(), "utf-8");
+                        System.out.println("filePath=" + filePath);
+                        findClasses(packageName, filePath, recursive, classSet);
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        }
+
+        });
+
         return classSet;
 
     }
@@ -66,10 +76,5 @@ public class ScanPackage {
         } else {
             System.out.println("目录下面没有文件或文件夹");
         }
-    }
-
-    public static void main(String[] args) throws IOException {
-        ScanPackage scanPackage = new ScanPackage();
-        System.out.println(scanPackage.scan("com.cqf.controller"));
     }
 }

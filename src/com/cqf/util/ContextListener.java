@@ -31,7 +31,7 @@ public class ContextListener implements ServletContextListener,
     public void contextInitialized(ServletContextEvent sce) {
         ScanPackage scanPackage = new ScanPackage();
         try {
-            Set<Class> classSet = scanPackage.scan("com.cqf.controller");
+            Set<Class> classSet = scanPackage.scan();
             Path path;
             Map<String, String> actionMap = new HashMap<>();
             for (Class clazz : classSet) {

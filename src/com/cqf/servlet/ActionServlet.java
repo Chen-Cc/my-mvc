@@ -1,7 +1,12 @@
 package com.cqf.servlet;
 
 import com.cqf.annotation.Param;
+import com.cqf.annotation.View;
+import com.cqf.model.Model;
 
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -14,13 +19,14 @@ import java.util.Map;
  */
 public class ActionServlet extends javax.servlet.http.HttpServlet {
     protected void doPost(javax.servlet.http.HttpServletRequest request, javax.servlet.http.HttpServletResponse response) throws javax.servlet.ServletException, IOException {
+        processRequest(request, response);
+    }
 
+    private void processRequest(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
         String requestURI = request.getRequestURI();
-        System.out.println(requestURI);
         if (requestURI.endsWith(".do")) {
-//            System.out.println(requestURI.substring(0, requestURI.length() - 3));
+            //获取初实化时扫描指定包名的actionMap
             Map<String, String> actionMap = (Map<String, String>) this.getServletContext().getAttribute("actionMap");
-//            System.out.println(actionMap);
             String actionClass = actionMap.get(requestURI.substring(0, requestURI.length() - 3));
             if (null == actionClass) {
                 try {
@@ -38,7 +44,6 @@ public class ActionServlet extends javax.servlet.http.HttpServlet {
             try {
                 Class clazz = Class.forName(className);
                 Object instance = clazz.newInstance();
-//                Method method = clazz.getDeclaredMethod(methodName);
 
                 Class entityClass = null;
                 Object classObj = null;
@@ -50,19 +55,14 @@ public class ActionServlet extends javax.servlet.http.HttpServlet {
                         Object[] objects = new Object[parameters.length];
                         int i = 0;
                         for (Parameter parameter : parameters) {
-                            String paramName = parameter.getName();
-                            System.out.println("paramName=" + paramName);
-
+                            String paramName;
                             String typeName = parameter.getParameterizedType().getTypeName();
-                            System.out.println("typeName=" + typeName);
                             //有注解的参数
                             if (parameter.isAnnotationPresent(Param.class)) {
                                 Param parameterAnnotation = parameter.getAnnotation(Param.class);
                                 paramName = parameterAnnotation.value();
                                 value = request.getParameter(paramName);
-                                System.out.println("value=" + value);
                                 objects[i]= typeTransport(typeName, value);
-                                System.out.println("objects[i]=" + objects[i].toString());
                             } else {
                                 if ("javax.servlet.http.HttpServletRequest".equals(typeName)) {
                                     objects[i] = request;
@@ -75,7 +75,6 @@ public class ActionServlet extends javax.servlet.http.HttpServlet {
                                     for (Field field : fields) {
                                         value = request.getParameter(field.getName());
                                         typeName = field.getType().getName();
-                                        System.out.println("typeName=" + typeName + " " + field.getName() + "=" + value);
                                         field.setAccessible(true);
                                         field.set(classObj, typeTransport(typeName, value));
                                         field.setAccessible(false);
@@ -85,28 +84,36 @@ public class ActionServlet extends javax.servlet.http.HttpServlet {
                             }
                             i++;
                         }
+                        //执行方法的返回值
+                        //是否有Response注解，有则跳转至一个地址
                         Object invoke = method.invoke(instance, objects);
-                        System.out.println("invoke=" +invoke.toString());
-                        response.getWriter().print(invoke);
+                        if (method.isAnnotationPresent(View.class)) {
+                            String redirectUrl = method.getAnnotation(View.class).value();
+                            Model model = (Model) invoke;
+                            Map attribute = model.getAttribute();
+                            attribute.forEach((k, v) -> {
+                                request.setAttribute(String.valueOf(k), v);
+                            });
+                            request.getRequestDispatcher(redirectUrl).forward(request, response);
+                        } else {
+                            response.getWriter().print(invoke);
+
+                        }
                         break;
                     }
                 }
-                return;
             } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
                 e.printStackTrace();
             }
 
         } else {
             response.getWriter().print("your request is invalid, check the url whether if end with '.do'" + request.getRequestURI());
-            return;
         }
-
-        response.getWriter().print("your method is " + request.getMethod() + " | your request uri is " + request.getRequestURI());
     }
 
     protected void doGet(javax.servlet.http.HttpServletRequest request, javax.servlet.http.HttpServletResponse response) throws javax.servlet.ServletException, IOException {
 
-        this.doPost(request, response);
+        processRequest(request, response);
     }
 
     private static Object typeTransport(String type, String value) {
